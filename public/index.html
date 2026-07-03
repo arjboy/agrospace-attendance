@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Factory Attendance — Face Recognition</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Factory Attendance</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -17,85 +17,91 @@
     </div>
   </div>
   <nav>
-    <button class="tab-btn active" data-tab="kiosk">📷 Mark Attendance</button>
-    <button class="tab-btn" data-tab="enroll">👤 Enroll Worker</button>
-    <button class="tab-btn" data-tab="report">📋 Daily Report</button>
-    <button class="tab-btn" data-tab="monthly">📊 Monthly Report</button>
+    <button class="tab-btn active" data-tab="kiosk">📷 Attendance</button>
+    <button class="tab-btn" data-tab="enroll">👤 Enroll</button>
+    <button class="tab-btn" data-tab="report">📋 Daily</button>
+    <button class="tab-btn" data-tab="monthly">📊 Monthly</button>
   </nav>
 </header>
 
 <main>
 
-  <!-- KIOSK / ATTENDANCE TAB -->
+  <!-- KIOSK -->
   <section id="kiosk" class="tab-panel active">
-    <p class="hint">Stand in front of the camera. Attendance is marked automatically when a face is recognized. Each worker is marked <strong>once per day only</strong>.</p>
+    <div class="big-hint">📸 Camera ke saamne khade ho — attendance automatic lagegi</div>
     <div class="video-wrap">
       <video id="kioskVideo" autoplay muted playsinline></video>
       <canvas id="kioskOverlay"></canvas>
+      <button id="kioskCamSwitch" class="cam-switch-btn" title="Switch Camera">🔄</button>
     </div>
-    <div id="kioskStatus" class="status">Loading models…</div>
+    <div id="kioskStatus" class="status">Loading...</div>
     <div id="kioskResult" class="result-card hidden"></div>
     <div id="todaySummary" class="summary-bar"></div>
   </section>
 
-  <!-- ENROLL TAB -->
+  <!-- ENROLL -->
   <section id="enroll" class="tab-panel">
-    <p class="hint">Capture a clear, front-facing photo to register a new worker.</p>
+    <div class="big-hint">👤 Naya worker register karo — naam likho aur photo lo</div>
     <div class="video-wrap">
       <video id="enrollVideo" autoplay muted playsinline></video>
       <canvas id="enrollOverlay"></canvas>
+      <button id="enrollCamSwitch" class="cam-switch-btn" title="Switch Camera">🔄</button>
     </div>
-    <form id="enrollForm">
-      <input type="text" id="empName" placeholder="Full Name" required>
-      <button type="button" id="captureBtn">📸 Capture Face</button>
-      <button type="submit" id="enrollSubmit" disabled>✅ Enroll Worker</button>
-    </form>
+    <div class="enroll-form">
+      <input type="text" id="empName" placeholder="Worker ka naam / Name" required>
+      <button type="button" id="captureBtn" class="big-btn capture-btn">📸 Photo Lo / Capture</button>
+      <button type="button" id="enrollSubmit" class="big-btn enroll-btn" disabled>✅ Register Karo / Enroll</button>
+    </div>
     <div id="enrollStatus" class="status"></div>
-    <h3>Enrolled Workers (<span id="workerCount">0</span>)</h3>
+    <h3>Registered Workers (<span id="workerCount">0</span>)</h3>
     <ul id="workerList"></ul>
   </section>
 
-  <!-- DAILY REPORT TAB -->
+  <!-- DAILY REPORT -->
   <section id="report" class="tab-panel">
     <h3>Daily Attendance Report</h3>
     <div class="report-controls">
       <input type="date" id="reportDate">
       <button id="loadReport">🔍 Load</button>
       <button id="todayReport">📅 Today</button>
-      <button id="exportDaily" class="export-btn">📥 Export Excel</button>
+      <button id="exportDaily" class="export-btn">📥 Excel</button>
     </div>
     <div id="dailySummary" class="summary-bar"></div>
-    <table id="reportTable">
-      <thead>
-        <tr><th>Sr No</th><th>Employee ID</th><th>Name</th><th>Status</th><th>Time</th></tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <div class="table-scroll">
+      <table id="reportTable">
+        <thead>
+          <tr><th>Sr</th><th>Name</th><th>Status</th><th>In</th><th>Out</th><th>Hrs</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </section>
 
-  <!-- MONTHLY REPORT TAB -->
+  <!-- MONTHLY REPORT -->
   <section id="monthly" class="tab-panel">
-    <h3>Monthly Attendance Summary</h3>
+    <h3>Monthly Attendance</h3>
     <div class="report-controls">
       <select id="monthSelect">
-        <option value="1">January</option><option value="2">February</option>
-        <option value="3">March</option><option value="4">April</option>
-        <option value="5">May</option><option value="6">June</option>
-        <option value="7">July</option><option value="8">August</option>
-        <option value="9">September</option><option value="10">October</option>
-        <option value="11">November</option><option value="12">December</option>
+        <option value="1">Jan</option><option value="2">Feb</option>
+        <option value="3">Mar</option><option value="4">Apr</option>
+        <option value="5">May</option><option value="6">Jun</option>
+        <option value="7">Jul</option><option value="8">Aug</option>
+        <option value="9">Sep</option><option value="10">Oct</option>
+        <option value="11">Nov</option><option value="12">Dec</option>
       </select>
       <input type="number" id="yearSelect" min="2024" max="2030" value="2026">
-      <button id="loadMonthly">🔍 Load</button>
-      <button id="exportMonthly" class="export-btn">📥 Export Excel</button>
+      <button id="loadMonthly">🔍</button>
+      <button id="exportMonthly" class="export-btn">📥 Excel</button>
     </div>
     <div id="monthlySummary" class="summary-bar"></div>
-    <table id="monthlyTable">
-      <thead>
-        <tr><th>Sr No</th><th>Employee ID</th><th>Name</th><th>Days Present</th><th>Total Working Days</th><th>Attendance %</th></tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <div class="table-scroll">
+      <table id="monthlyTable">
+        <thead>
+          <tr><th>Sr</th><th>Name</th><th>Days</th><th>Hours</th><th>%</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
   </section>
 
 </main>

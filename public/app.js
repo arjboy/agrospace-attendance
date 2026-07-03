@@ -1,156 +1,155 @@
 // ===========================
-// AUTH CHECK — Redirect to login if not authenticated
+// AUTH
 // ===========================
 const AUTH_TOKEN = localStorage.getItem('authToken');
-const AUTH_USER = localStorage.getItem('authUser');
-
-(async function checkAuth() {
-  if (!AUTH_TOKEN) { window.location.href = '/login.html'; return; }
+if (!AUTH_TOKEN) { window.location.href = '/login.html'; }
+(async () => {
   try {
-    const res = await fetch('/api/auth/check', { headers: { 'x-auth-token': AUTH_TOKEN } });
-    const data = await res.json();
-    if (!data.loggedIn) { localStorage.clear(); window.location.href = '/login.html'; return; }
-    document.getElementById('loggedUser').textContent = '👤 ' + data.username;
+    const r = await fetch('/api/auth/check', { headers: { 'x-auth-token': AUTH_TOKEN } });
+    const d = await r.json();
+    if (!d.loggedIn) { localStorage.clear(); window.location.href = '/login.html'; return; }
+    document.getElementById('loggedUser').textContent = '👤 ' + d.username;
   } catch (e) { window.location.href = '/login.html'; }
 })();
 
-// Logout
 document.getElementById('logoutBtn').addEventListener('click', async () => {
   await fetch('/api/logout', { method: 'POST', headers: { 'x-auth-token': AUTH_TOKEN } });
   localStorage.clear();
   window.location.href = '/login.html';
 });
 
-// Helper: authenticated fetch
-function authFetch(url, options = {}) {
-  options.headers = options.headers || {};
-  options.headers['x-auth-token'] = AUTH_TOKEN;
-  return fetch(url, options).then(res => {
-    if (res.status === 401) { localStorage.clear(); window.location.href = '/login.html'; }
-    return res;
-  });
+function authFetch(url, opts = {}) {
+  opts.headers = opts.headers || {};
+  opts.headers['x-auth-token'] = AUTH_TOKEN;
+  return fetch(url, opts).then(r => { if (r.status === 401) { localStorage.clear(); window.location.href = '/login.html'; } return r; });
 }
 
 // ===========================
-// FACE DETECTION SETUP
+// FACE DETECTION
 // ===========================
 const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@0.22.2/weights';
-
 let modelsLoaded = false;
 let capturedDescriptor = null;
-let kioskStream = null;
-let enrollStream = null;
 let kioskRunning = false;
 let lastMarkedId = null;
 let lastMarkedTime = 0;
-const COOLDOWN_MS = 10000;
+const COOLDOWN_MS = 8000;
+
+// Camera state
+let kioskStream = null, enrollStream = null;
+let kioskFacing = 'environment'; // default back camera for kiosk
+let enrollFacing = 'user';       // default front camera for enroll
 
 const DETECT_OPTIONS = new faceapi.TinyFaceDetectorOptions({
-  inputSize: 416,
+  inputSize: 320,     // faster on mobile
   scoreThreshold: 0.3
 });
 
-// ---------- Tabs ----------
+// ===========================
+// TABS
+// ===========================
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(btn.dataset.tab).classList.add('active');
-    stopKioskCamera();
-    stopEnrollCamera();
-    if (btn.dataset.tab === 'kiosk') startKioskCamera();
-    if (btn.dataset.tab === 'enroll') { startEnrollCamera(); loadWorkerList(); }
+    stopKiosk(); stopEnroll();
+    if (btn.dataset.tab === 'kiosk') startKiosk();
+    if (btn.dataset.tab === 'enroll') { startEnroll(); loadWorkerList(); }
     if (btn.dataset.tab === 'report') loadTodayReport();
     if (btn.dataset.tab === 'monthly') loadCurrentMonth();
   });
 });
 
-// ---------- Model loading ----------
+// ===========================
+// CAMERA HELPERS
+// ===========================
+async function openCamera(videoEl, facing) {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: facing, width: { ideal: 640 }, height: { ideal: 480 } }
+  });
+  videoEl.srcObject = stream;
+  // Mirror front camera only
+  if (facing === 'user') videoEl.classList.add('front-cam');
+  else videoEl.classList.remove('front-cam');
+  await new Promise(res => { videoEl.onloadeddata = res; if (videoEl.readyState >= 2) res(); });
+  return stream;
+}
+function closeCamera(stream) { if (stream) stream.getTracks().forEach(t => t.stop()); }
+
+// ===========================
+// MODEL LOADING
+// ===========================
 async function loadModels() {
   const s = document.getElementById('kioskStatus');
-  s.textContent = 'Loading face models... (first time ~15 sec)';
+  s.textContent = 'Models load ho rahe hain... / Loading models...';
   try {
     await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-    s.textContent = 'Model 1/3 loaded...';
+    s.textContent = 'Model 1/3 ✔';
     await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
-    s.textContent = 'Model 2/3 loaded...';
+    s.textContent = 'Model 2/3 ✔';
     await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-    s.textContent = 'All models loaded ✔ Starting camera...';
+    s.textContent = 'Ready ✔ Camera shuru ho raha hai...';
     modelsLoaded = true;
-    startKioskCamera();
+    startKiosk();
   } catch (err) {
-    s.textContent = 'Failed to load face models: ' + err.message;
+    s.textContent = 'Model load fail: ' + err.message;
   }
 }
 loadModels();
 
-// ---------- Camera helpers ----------
-async function startCamera(videoEl) {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
-  });
-  videoEl.srcObject = stream;
-  await new Promise(resolve => {
-    videoEl.onloadeddata = resolve;
-    if (videoEl.readyState >= 2) resolve();
-  });
-  return stream;
-}
-function stopCamera(stream) {
-  if (stream) stream.getTracks().forEach(t => t.stop());
-}
-
 // ===========================
-// KIOSK — Mark Attendance
+// KIOSK — MARK ATTENDANCE
 // ===========================
-async function startKioskCamera() {
+async function startKiosk() {
   if (!modelsLoaded || kioskRunning) return;
   const video = document.getElementById('kioskVideo');
   try {
-    document.getElementById('kioskStatus').textContent = 'Starting camera...';
-    kioskStream = await startCamera(video);
-    document.getElementById('kioskStatus').textContent = 'Camera ready ✔ Look at the camera.';
+    document.getElementById('kioskStatus').textContent = 'Camera shuru ho raha hai...';
+    kioskStream = await openCamera(video, kioskFacing);
+    document.getElementById('kioskStatus').textContent = '✔ Camera ready — apna chehra dikhao';
     kioskRunning = true;
     loadTodaySummary();
-    detectLoop();
+    kioskDetectLoop();
   } catch (e) {
     document.getElementById('kioskStatus').textContent = 'Camera error: ' + e.message;
   }
 }
-function stopKioskCamera() { kioskRunning = false; stopCamera(kioskStream); kioskStream = null; }
+function stopKiosk() { kioskRunning = false; closeCamera(kioskStream); kioskStream = null; }
 
-async function detectLoop() {
+// Camera switch — kiosk
+document.getElementById('kioskCamSwitch').addEventListener('click', async () => {
+  kioskFacing = kioskFacing === 'environment' ? 'user' : 'environment';
+  stopKiosk();
+  await startKiosk();
+});
+
+async function kioskDetectLoop() {
   if (!kioskRunning) return;
   const video = document.getElementById('kioskVideo');
   const overlay = document.getElementById('kioskOverlay');
-  const statusEl = document.getElementById('kioskStatus');
   try {
-    const detection = await faceapi
-      .detectSingleFace(video, DETECT_OPTIONS)
-      .withFaceLandmarks()
-      .withFaceDescriptor();
+    const det = await faceapi.detectSingleFace(video, DETECT_OPTIONS).withFaceLandmarks().withFaceDescriptor();
     const ctx = overlay.getContext('2d');
     overlay.width = video.videoWidth || 640;
     overlay.height = video.videoHeight || 480;
     ctx.clearRect(0, 0, overlay.width, overlay.height);
-    if (detection) {
-      const box = detection.detection.box;
-      ctx.strokeStyle = '#00ff00';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(box.x, box.y, box.width, box.height);
-      statusEl.textContent = `Face detected (${(detection.detection.score * 100).toFixed(0)}%) — matching...`;
-      await tryMarkAttendance(Array.from(detection.descriptor));
+
+    if (det) {
+      const b = det.detection.box;
+      ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 3;
+      ctx.strokeRect(b.x, b.y, b.width, b.height);
+      document.getElementById('kioskStatus').textContent = `Chehra dikha (${(det.detection.score*100).toFixed(0)}%) — check ho raha hai...`;
+      await markAttendance(Array.from(det.descriptor));
     } else {
-      statusEl.textContent = 'No face detected — move closer, face the camera.';
+      document.getElementById('kioskStatus').textContent = 'Chehra nahi dikha — camera ke paas aao';
     }
-  } catch (err) { console.error('Detection error:', err); }
-  setTimeout(detectLoop, 1000);
+  } catch (err) { console.error(err); }
+  setTimeout(kioskDetectLoop, 700); // fast loop
 }
 
-async function tryMarkAttendance(descriptor) {
-  const statusEl = document.getElementById('kioskStatus');
-  const resultCard = document.getElementById('kioskResult');
+async function markAttendance(descriptor) {
   const now = Date.now();
   if (lastMarkedId && now - lastMarkedTime < COOLDOWN_MS) return;
 
@@ -161,182 +160,198 @@ async function tryMarkAttendance(descriptor) {
       body: JSON.stringify({ descriptor })
     });
     const data = await res.json();
+    const card = document.getElementById('kioskResult');
+
     if (!res.ok) {
       if (data.error === 'Face not recognized') {
-        statusEl.textContent = `Face not recognized (dist: ${data.distance ? data.distance.toFixed(2) : '?'}). Worker enrolled?`;
-      } else if (data.error === 'No workers enrolled yet') {
-        statusEl.textContent = 'No workers enrolled. Go to Enroll tab first.';
+        document.getElementById('kioskStatus').textContent = 'Pehchaan nahi hua — kya yeh worker registered hai?';
+      } else if (data.error === 'No workers enrolled') {
+        document.getElementById('kioskStatus').textContent = 'Koi worker registered nahi — pehle Enroll karo';
       }
       return;
     }
+
     lastMarkedId = data.record.employeeId;
     lastMarkedTime = Date.now();
-    if (data.alreadyMarked) {
-      resultCard.className = 'result-card already';
-      resultCard.innerHTML = `<h2>ℹ️ Already Marked</h2><p><strong>${data.message}</strong></p>`;
-    } else {
-      resultCard.className = 'result-card';
-      resultCard.innerHTML = `
-        <h2>✅ Attendance Marked!</h2>
-        <p><strong>${data.record.name}</strong> (${data.record.employeeId})</p>
-        <p>${new Date(data.record.time).toLocaleTimeString('en-IN')}</p>
-        <p>Confidence: ${(data.record.confidence * 100).toFixed(0)}%</p>
+
+    if (data.type === 'check-in') {
+      card.className = 'result-card checkin';
+      card.innerHTML = `
+        <h2>✅ CHECK IN</h2>
+        <p><strong>${data.record.name}</strong></p>
+        <p>🕐 ${new Date(data.record.time).toLocaleTimeString('en-IN')}</p>
+        <p style="font-size:14px;color:#666">Shift shuru! / Shift started</p>
       `;
       loadTodaySummary();
+    } else if (data.type === 'check-out') {
+      card.className = 'result-card checkout';
+      card.innerHTML = `
+        <h2>👋 CHECK OUT</h2>
+        <p><strong>${data.record.name}</strong></p>
+        <p>🕐 In: ${new Date(data.record.checkIn).toLocaleTimeString('en-IN')} → Out: ${new Date(data.record.checkOut).toLocaleTimeString('en-IN')}</p>
+        <p style="font-size:18px;font-weight:700;color:#856404">⏱ ${data.record.hoursWorked} hours worked</p>
+      `;
+      loadTodaySummary();
+    } else if (data.type === 'done') {
+      card.className = 'result-card done';
+      card.innerHTML = `
+        <h2>ℹ️ Already Done</h2>
+        <p><strong>${data.message}</strong></p>
+        <p style="font-size:14px">Aaj ka check-in aur check-out ho chuka hai</p>
+      `;
     }
-    resultCard.classList.remove('hidden');
-  } catch (e) { statusEl.textContent = 'Network error: ' + e.message; }
+    card.classList.remove('hidden');
+  } catch (e) {
+    document.getElementById('kioskStatus').textContent = 'Network error: ' + e.message;
+  }
 }
 
 async function loadTodaySummary() {
   try {
-    const res = await authFetch('/api/attendance?date=' + new Date().toISOString().split('T')[0]);
-    const data = await res.json();
+    const r = await authFetch('/api/attendance?date=' + new Date().toISOString().split('T')[0]);
+    const d = await r.json();
     document.getElementById('todaySummary').innerHTML = `
-      <span class="total">Total: ${data.totalWorkers}</span>
-      <span class="present">Present: ${data.totalPresent}</span>
-      <span class="absent">Absent: ${data.totalAbsent}</span>
+      <span class="total">Total: ${d.totalWorkers}</span>
+      <span class="present">Present: ${d.totalPresent}</span>
+      <span class="absent">Absent: ${d.totalAbsent}</span>
     `;
-  } catch (e) { /* ignore */ }
+  } catch (e) {}
 }
 
 // ===========================
 // ENROLL
 // ===========================
-async function startEnrollCamera() {
+async function startEnroll() {
   if (!modelsLoaded) return;
-  const video = document.getElementById('enrollVideo');
   try {
-    enrollStream = await startCamera(video);
-    document.getElementById('enrollStatus').textContent = 'Camera ready. Click Capture Face.';
+    enrollStream = await openCamera(document.getElementById('enrollVideo'), enrollFacing);
+    document.getElementById('enrollStatus').textContent = 'Camera ready — Photo Lo button dabao';
   } catch (e) {
     document.getElementById('enrollStatus').textContent = 'Camera error: ' + e.message;
   }
 }
-function stopEnrollCamera() { stopCamera(enrollStream); enrollStream = null; }
+function stopEnroll() { closeCamera(enrollStream); enrollStream = null; }
+
+// Camera switch — enroll
+document.getElementById('enrollCamSwitch').addEventListener('click', async () => {
+  enrollFacing = enrollFacing === 'user' ? 'environment' : 'user';
+  stopEnroll();
+  await startEnroll();
+});
 
 document.getElementById('captureBtn').addEventListener('click', async () => {
   const video = document.getElementById('enrollVideo');
   const overlay = document.getElementById('enrollOverlay');
   const status = document.getElementById('enrollStatus');
-  status.textContent = 'Detecting face...';
+  status.textContent = 'Chehra dhundh rahe hain... / Detecting...';
   try {
-    const detection = await faceapi
-      .detectSingleFace(video, DETECT_OPTIONS)
-      .withFaceLandmarks()
-      .withFaceDescriptor();
+    const det = await faceapi.detectSingleFace(video, DETECT_OPTIONS).withFaceLandmarks().withFaceDescriptor();
     const ctx = overlay.getContext('2d');
     overlay.width = video.videoWidth || 640;
     overlay.height = video.videoHeight || 480;
     ctx.clearRect(0, 0, overlay.width, overlay.height);
-    if (!detection) { status.textContent = 'No face detected. Face the camera with good lighting.'; return; }
-    const box = detection.detection.box;
-    ctx.strokeStyle = '#00ff00';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(box.x, box.y, box.width, box.height);
-    capturedDescriptor = Array.from(detection.descriptor);
-    status.textContent = `Face captured ✔ (${(detection.detection.score * 100).toFixed(0)}%). Fill details and click Enroll.`;
+    if (!det) { status.textContent = 'Chehra nahi mila — seedha camera ke saamne aao, roshni mein'; return; }
+    const b = det.detection.box;
+    ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 3;
+    ctx.strokeRect(b.x, b.y, b.width, b.height);
+    capturedDescriptor = Array.from(det.descriptor);
+    status.textContent = `✔ Photo le li (${(det.detection.score*100).toFixed(0)}%) — ab Register karo`;
     document.getElementById('enrollSubmit').disabled = false;
   } catch (err) { status.textContent = 'Error: ' + err.message; }
 });
 
-document.getElementById('enrollForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
+document.getElementById('enrollSubmit').addEventListener('click', async () => {
   const status = document.getElementById('enrollStatus');
-  const empName = document.getElementById('empName').value.trim();
-  if (!capturedDescriptor) { status.textContent = 'Capture face first.'; return; }
+  const name = document.getElementById('empName').value.trim();
+  if (!name) { status.textContent = 'Naam likho pehle / Enter name first'; return; }
+  if (!capturedDescriptor) { status.textContent = 'Pehle photo lo / Capture face first'; return; }
   try {
-    const res = await authFetch('/api/enroll', {
+    const r = await authFetch('/api/enroll', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: empName, descriptor: capturedDescriptor })
+      body: JSON.stringify({ name, descriptor: capturedDescriptor })
     });
-    const data = await res.json();
-    if (!res.ok) { status.textContent = 'Error: ' + data.error; return; }
-    status.textContent = '✅ ' + data.message;
-    document.getElementById('enrollForm').reset();
+    const d = await r.json();
+    if (!r.ok) { status.textContent = 'Error: ' + d.error; return; }
+    status.textContent = '✅ ' + d.message;
+    document.getElementById('empName').value = '';
     capturedDescriptor = null;
     document.getElementById('enrollSubmit').disabled = true;
     loadWorkerList();
-  } catch (err) { status.textContent = 'Network error: ' + err.message; }
+  } catch (e) { status.textContent = 'Network error: ' + e.message; }
 });
 
 async function loadWorkerList() {
   const list = document.getElementById('workerList');
   list.innerHTML = '';
   try {
-    const res = await authFetch('/api/workers');
-    const workers = await res.json();
+    const r = await authFetch('/api/workers');
+    const workers = await r.json();
     document.getElementById('workerCount').textContent = workers.length;
-    if (workers.length === 0) { list.innerHTML = '<li>No workers enrolled yet.</li>'; return; }
+    if (!workers.length) { list.innerHTML = '<li>Koi worker registered nahi hai</li>'; return; }
     workers.forEach(w => {
       const li = document.createElement('li');
       li.innerHTML = `<span>${w.name} (${w.employeeId})</span>`;
-      const delBtn = document.createElement('button');
-      delBtn.textContent = 'Remove';
-      delBtn.onclick = async () => {
-        if (confirm(`Remove ${w.name}?`)) {
+      const del = document.createElement('button');
+      del.textContent = '✕ Remove';
+      del.onclick = async () => {
+        if (confirm(`${w.name} ko hatana hai?`)) {
           await authFetch(`/api/workers/${w.employeeId}`, { method: 'DELETE' });
           loadWorkerList();
         }
       };
-      li.appendChild(delBtn);
+      li.appendChild(del);
       list.appendChild(li);
     });
-  } catch (e) { /* ignore */ }
+  } catch (e) {}
 }
 
 // ===========================
 // DAILY REPORT
 // ===========================
-document.getElementById('loadReport').addEventListener('click', () => {
-  loadDailyReport(document.getElementById('reportDate').value);
-});
+document.getElementById('loadReport').addEventListener('click', () => loadDailyReport(document.getElementById('reportDate').value));
 document.getElementById('todayReport').addEventListener('click', loadTodayReport);
 document.getElementById('exportDaily').addEventListener('click', () => {
-  const date = document.getElementById('reportDate').value;
-  if (!date) { alert('Select a date first'); return; }
-  // Open export with auth token as query param
-  window.open(`/api/export/daily?date=${date}&token=${AUTH_TOKEN}`, '_blank');
+  const d = document.getElementById('reportDate').value;
+  if (!d) { alert('Date select karo'); return; }
+  window.open(`/api/export/daily?date=${d}&token=${AUTH_TOKEN}`, '_blank');
 });
 
 function loadTodayReport() {
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById('reportDate').value = today;
-  loadDailyReport(today);
+  const t = new Date().toISOString().split('T')[0];
+  document.getElementById('reportDate').value = t;
+  loadDailyReport(t);
 }
 
 async function loadDailyReport(date) {
-  if (!date) { alert('Please select a date.'); return; }
+  if (!date) { alert('Date select karo'); return; }
   const tbody = document.querySelector('#reportTable tbody');
-  tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
   try {
-    const res = await authFetch(`/api/attendance?date=${date}`);
-    const data = await res.json();
+    const r = await authFetch(`/api/attendance?date=${date}`);
+    const d = await r.json();
     document.getElementById('dailySummary').innerHTML = `
-      <span>📅 ${formatDate(data.date)}</span>
-      <span class="total">Total: ${data.totalWorkers}</span>
-      <span class="present">✅ Present: ${data.totalPresent}</span>
-      <span class="absent">❌ Absent: ${data.totalAbsent}</span>
+      <span>📅 ${formatDate(d.date)}</span>
+      <span class="total">Total: ${d.totalWorkers}</span>
+      <span class="present">✅ ${d.totalPresent}</span>
+      <span class="absent">❌ ${d.totalAbsent}</span>
     `;
     tbody.innerHTML = '';
-    if (data.report.length === 0) { tbody.innerHTML = '<tr><td colspan="5">No workers enrolled.</td></tr>'; return; }
-    data.report.sort((a, b) => {
-      if (a.status === 'Present' && b.status === 'Absent') return -1;
-      if (a.status === 'Absent' && b.status === 'Present') return 1;
-      return a.name.localeCompare(b.name);
+    if (!d.report.length) { tbody.innerHTML = '<tr><td colspan="6">No data</td></tr>'; return; }
+    d.report.sort((a, b) => {
+      const order = { 'Complete': 0, 'Checked In': 1, 'Absent': 2 };
+      return (order[a.status] || 2) - (order[b.status] || 2) || a.name.localeCompare(b.name);
     });
-    data.report.forEach((r, i) => {
+    d.report.forEach((r, i) => {
+      const bc = r.status === 'Complete' ? 'badge-complete' : r.status === 'Checked In' ? 'badge-checkedin' : 'badge-absent';
+      const cin = r.checkIn ? new Date(r.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—';
+      const cout = r.checkOut ? new Date(r.checkOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—';
+      const hrs = r.hoursWorked ? parseFloat(r.hoursWorked).toFixed(1) : '—';
       const tr = document.createElement('tr');
-      const badgeClass = r.status === 'Present' ? 'badge-present' : 'badge-absent';
-      const time = r.time ? new Date(r.time).toLocaleTimeString('en-IN') : '—';
-      tr.innerHTML = `
-        <td>${i + 1}</td><td>${r.employeeId}</td><td>${r.name}</td>
-        <td><span class="badge ${badgeClass}">${r.status}</span></td><td>${time}</td>
-      `;
+      tr.innerHTML = `<td>${i+1}</td><td>${r.name}</td><td><span class="badge ${bc}">${r.status}</span></td><td>${cin}</td><td>${cout}</td><td>${hrs}</td>`;
       tbody.appendChild(tr);
     });
-  } catch (e) { tbody.innerHTML = `<tr><td colspan="5">Error: ${e.message}</td></tr>`; }
+  } catch (e) { tbody.innerHTML = `<tr><td colspan="6">Error: ${e.message}</td></tr>`; }
 }
 
 // ===========================
@@ -344,50 +359,41 @@ async function loadDailyReport(date) {
 // ===========================
 document.getElementById('loadMonthly').addEventListener('click', loadMonthlyReport);
 document.getElementById('exportMonthly').addEventListener('click', () => {
-  const month = document.getElementById('monthSelect').value;
-  const year = document.getElementById('yearSelect').value;
-  window.open(`/api/export/monthly?month=${month}&year=${year}&token=${AUTH_TOKEN}`, '_blank');
+  window.open(`/api/export/monthly?month=${document.getElementById('monthSelect').value}&year=${document.getElementById('yearSelect').value}&token=${AUTH_TOKEN}`, '_blank');
 });
-
 function loadCurrentMonth() {
-  const now = new Date();
-  document.getElementById('monthSelect').value = now.getMonth() + 1;
-  document.getElementById('yearSelect').value = now.getFullYear();
+  const n = new Date();
+  document.getElementById('monthSelect').value = n.getMonth() + 1;
+  document.getElementById('yearSelect').value = n.getFullYear();
   loadMonthlyReport();
 }
-
 async function loadMonthlyReport() {
   const month = document.getElementById('monthSelect').value;
   const year = document.getElementById('yearSelect').value;
   const tbody = document.querySelector('#monthlyTable tbody');
-  tbody.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
   try {
-    const res = await authFetch(`/api/attendance/monthly?month=${month}&year=${year}`);
-    const data = await res.json();
-    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const r = await authFetch(`/api/attendance/monthly?month=${month}&year=${year}`);
+    const d = await r.json();
+    const mn = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     document.getElementById('monthlySummary').innerHTML = `
-      <span>📊 ${monthNames[data.month - 1]} ${data.year}</span>
-      <span class="total">Working Days: ${data.workingDays}</span>
-      <span class="total">Workers: ${data.summary.length}</span>
+      <span>📊 ${mn[d.month-1]} ${d.year}</span>
+      <span class="total">Working Days: ${d.workingDays}</span>
     `;
     tbody.innerHTML = '';
-    if (data.summary.length === 0) { tbody.innerHTML = '<tr><td colspan="6">No workers enrolled.</td></tr>'; return; }
-    data.summary.sort((a, b) => b.totalPresent - a.totalPresent);
-    data.summary.forEach((w, i) => {
-      const pct = data.workingDays > 0 ? ((w.totalPresent / data.workingDays) * 100).toFixed(0) : '0';
-      const pctColor = pct >= 90 ? '#155724' : pct >= 75 ? '#856404' : '#721c24';
+    if (!d.summary.length) { tbody.innerHTML = '<tr><td colspan="5">No data</td></tr>'; return; }
+    d.summary.sort((a, b) => b.totalPresent - a.totalPresent);
+    d.summary.forEach((w, i) => {
+      const pct = d.workingDays > 0 ? Math.round((w.totalPresent / d.workingDays) * 100) : 0;
+      const color = pct >= 90 ? '#155724' : pct >= 75 ? '#856404' : '#dc3545';
       const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${i + 1}</td><td>${w.employeeId}</td><td>${w.name}</td>
-        <td><strong>${w.totalPresent}</strong></td><td>${w.totalWorkingDays}</td>
-        <td style="color:${pctColor};font-weight:600;">${pct}%</td>
-      `;
+      tr.innerHTML = `<td>${i+1}</td><td>${w.name}</td><td><strong>${w.totalPresent}</strong>/${d.workingDays}</td>
+        <td>${w.totalHours}h</td><td style="color:${color};font-weight:700">${pct}%</td>`;
       tbody.appendChild(tr);
     });
-  } catch (e) { tbody.innerHTML = `<tr><td colspan="6">Error: ${e.message}</td></tr>`; }
+  } catch (e) { tbody.innerHTML = `<tr><td colspan="5">Error: ${e.message}</td></tr>`; }
 }
 
-function formatDate(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+function formatDate(s) {
+  return new Date(s + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 }
