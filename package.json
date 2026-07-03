@@ -1,0 +1,13 @@
+{
+  "name": "factory-face-attendance",
+  "version": "2.0.0",
+  "description": "Face recognition attendance system for factory workers",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5"
+  }
+}

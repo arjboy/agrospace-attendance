@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Factory Attendance — Face Recognition</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>🏭 Factory Attendance</h1>
+  <nav>
+    <button class="tab-btn active" data-tab="kiosk">📷 Mark Attendance</button>
+    <button class="tab-btn" data-tab="enroll">👤 Enroll Worker</button>
+    <button class="tab-btn" data-tab="report">📋 Daily Report</button>
+    <button class="tab-btn" data-tab="monthly">📊 Monthly Report</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- KIOSK / ATTENDANCE TAB -->
+  <section id="kiosk" class="tab-panel active">
+    <p class="hint">Stand in front of the camera. Attendance is marked automatically when a face is recognized. Each worker is marked <strong>once per day only</strong>.</p>
+    <div class="video-wrap">
+      <video id="kioskVideo" autoplay muted playsinline></video>
+      <canvas id="kioskOverlay"></canvas>
+    </div>
+    <div id="kioskStatus" class="status">Loading models…</div>
+    <div id="kioskResult" class="result-card hidden"></div>
+    <div id="todaySummary" class="summary-bar"></div>
+  </section>
+
+  <!-- ENROLL TAB -->
+  <section id="enroll" class="tab-panel">
+    <p class="hint">Capture a clear, front-facing photo to register a new worker.</p>
+    <div class="video-wrap">
+      <video id="enrollVideo" autoplay muted playsinline></video>
+      <canvas id="enrollOverlay"></canvas>
+    </div>
+    <form id="enrollForm">
+      <input type="text" id="empId" placeholder="Employee ID (e.g. EMP001)" required>
+      <input type="text" id="empName" placeholder="Full Name" required>
+      <button type="button" id="captureBtn">📸 Capture Face</button>
+      <button type="submit" id="enrollSubmit" disabled>✅ Enroll Worker</button>
+    </form>
+    <div id="enrollStatus" class="status"></div>
+    <h3>Enrolled Workers (<span id="workerCount">0</span>)</h3>
+    <ul id="workerList"></ul>
+  </section>
+
+  <!-- DAILY REPORT TAB -->
+  <section id="report" class="tab-panel">
+    <h3>Daily Attendance Report</h3>
+    <div class="report-controls">
+      <input type="date" id="reportDate">
+      <button id="loadReport">🔍 Load</button>
+      <button id="todayReport">📅 Today</button>
+      <button id="exportDaily" class="export-btn">📥 Export Excel</button>
+    </div>
+    <div id="dailySummary" class="summary-bar"></div>
+    <table id="reportTable">
+      <thead>
+        <tr>
+          <th>Sr No</th>
+          <th>Employee ID</th>
+          <th>Name</th>
+          <th>Status</th>
+          <th>Time</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <!-- MONTHLY REPORT TAB -->
+  <section id="monthly" class="tab-panel">
+    <h3>Monthly Attendance Summary</h3>
+    <div class="report-controls">
+      <select id="monthSelect">
+        <option value="1">January</option>
+        <option value="2">February</option>
+        <option value="3">March</option>
+        <option value="4">April</option>
+        <option value="5">May</option>
+        <option value="6">June</option>
+        <option value="7">July</option>
+        <option value="8">August</option>
+        <option value="9">September</option>
+        <option value="10">October</option>
+        <option value="11">November</option>
+        <option value="12">December</option>
+      </select>
+      <input type="number" id="yearSelect" min="2024" max="2030" value="2026">
+      <button id="loadMonthly">🔍 Load</button>
+      <button id="exportMonthly" class="export-btn">📥 Export Excel</button>
+    </div>
+    <div id="monthlySummary" class="summary-bar"></div>
+    <table id="monthlyTable">
+      <thead>
+        <tr>
+          <th>Sr No</th>
+          <th>Employee ID</th>
+          <th>Name</th>
+          <th>Days Present</th>
+          <th>Total Working Days</th>
+          <th>Attendance %</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
