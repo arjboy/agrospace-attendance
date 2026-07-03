@@ -5,8 +5,6 @@ body {
   background: #f0f2f1;
   color: #1e2a24;
 }
-
-/* Header */
 header { background: #1a3528; color: #f5f0e6; padding: 12px 16px; }
 .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 header h1 { margin: 0; font-size: 18px; }
@@ -22,18 +20,15 @@ nav { display: flex; justify-content: center; gap: 5px; flex-wrap: wrap; }
 }
 .tab-btn.active { background: #c9a84c; color: #1a3528; font-weight: 700; }
 
-/* Main */
 main { max-width: 600px; margin: 0 auto; padding: 12px; }
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
 
-/* Big hint text */
 .big-hint {
   text-align: center; font-size: 16px; font-weight: 600; color: #1a3528;
   background: #e8f0eb; border-radius: 10px; padding: 12px; margin-bottom: 12px;
 }
 
-/* Video + camera switch */
 .video-wrap {
   position: relative; width: 100%; aspect-ratio: 4/3;
   background: #111; border-radius: 14px; overflow: hidden; margin: 0 auto;
@@ -47,14 +42,12 @@ video.front-cam { transform: scaleX(-1); }
   background: rgba(0,0,0,0.6); color: #fff; border: 2px solid #fff;
   width: 48px; height: 48px; border-radius: 50%; font-size: 22px;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
-  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
 }
 .cam-switch-btn:active { background: rgba(255,255,255,0.3); }
 
-/* Status */
 .status { margin-top: 10px; font-size: 15px; text-align: center; color: #444; font-weight: 500; }
 
-/* Result card — BIG and clear */
+/* Result cards */
 .result-card {
   margin-top: 14px; padding: 20px; border-radius: 14px;
   text-align: center; animation: popIn 0.3s ease-out;
@@ -63,10 +56,16 @@ video.front-cam { transform: scaleX(-1); }
 .result-card.hidden { display: none; }
 .result-card h2 { margin: 0 0 6px; font-size: 22px; }
 .result-card p { margin: 4px 0; font-size: 16px; }
+.result-card .sub { font-size: 14px; color: #666; }
+.result-card .hours { font-size: 18px; font-weight: 700; color: #856404; }
+.result-card .payment { font-size: 20px; font-weight: 800; color: #155724; margin-top: 6px; }
+
 .result-card.checkin { background: #d4edda; border: 3px solid #28a745; }
 .result-card.checkin h2 { color: #155724; }
 .result-card.checkout { background: #fff3cd; border: 3px solid #ffc107; }
 .result-card.checkout h2 { color: #856404; }
+.result-card.tooearly { background: #fde8e8; border: 3px solid #e74c3c; }
+.result-card.tooearly h2 { color: #c0392b; }
 .result-card.done { background: #e2e3e5; border: 3px solid #6c757d; }
 .result-card.done h2 { color: #383d41; }
 
@@ -80,11 +79,10 @@ video.front-cam { transform: scaleX(-1); }
 .summary-bar .present { color: #28a745; }
 .summary-bar .absent { color: #dc3545; }
 .summary-bar .total { color: #1a3528; }
+.summary-bar .payment { color: #155724; background: #d4edda; padding: 2px 10px; border-radius: 8px; }
 
-/* Enroll form — big touch targets */
-.enroll-form {
-  display: flex; flex-direction: column; gap: 12px; margin-top: 14px;
-}
+/* Enroll form */
+.enroll-form { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
 .enroll-form input {
   padding: 16px; border-radius: 10px; border: 2px solid #ccc;
   font-size: 18px; text-align: center;
@@ -98,9 +96,7 @@ video.front-cam { transform: scaleX(-1); }
 .capture-btn:active { background: #1a5bb5; }
 .enroll-btn { background: #28a745; color: #fff; }
 .enroll-btn:disabled { background: #aaa; cursor: not-allowed; }
-.enroll-btn:not(:disabled):active { background: #1e7e34; }
 
-/* Worker list */
 #workerList { list-style: none; padding: 0; margin-top: 8px; }
 #workerList li {
   background: #fff; padding: 12px; border-radius: 10px; margin-bottom: 6px;
@@ -130,14 +126,13 @@ table {
 th, td { padding: 10px 6px; text-align: left; border-bottom: 1px solid #eee; }
 th { background: #1a3528; color: #fff; font-weight: 600; white-space: nowrap; font-size: 13px; }
 tr:hover { background: #f5f8f6; }
+.pay-col { color: #155724; font-weight: 700; }
 
-/* Status badges */
 .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; }
 .badge-complete { background: #d4edda; color: #155724; }
 .badge-checkedin { background: #fff3cd; color: #856404; }
 .badge-absent { background: #f8d7da; color: #721c24; }
 
-/* Mobile */
 @media (max-width: 480px) {
   main { padding: 8px; }
   .big-hint { font-size: 14px; padding: 10px; }
