@@ -35,15 +35,11 @@ let lastMarkedId = null;
 let lastMarkedTime = 0;
 const COOLDOWN_MS = 8000;
 
-// Camera state
 let kioskStream = null, enrollStream = null;
-let kioskFacing = 'environment'; // default back camera for kiosk
-let enrollFacing = 'user';       // default front camera for enroll
+let kioskFacing = 'environment';
+let enrollFacing = 'user';
 
-const DETECT_OPTIONS = new faceapi.TinyFaceDetectorOptions({
-  inputSize: 320,     // faster on mobile
-  scoreThreshold: 0.3
-});
+const DETECT_OPTIONS = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.3 });
 
 // ===========================
 // TABS
@@ -63,14 +59,13 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 // ===========================
-// CAMERA HELPERS
+// CAMERA
 // ===========================
 async function openCamera(videoEl, facing) {
   const stream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: facing, width: { ideal: 640 }, height: { ideal: 480 } }
   });
   videoEl.srcObject = stream;
-  // Mirror front camera only
   if (facing === 'user') videoEl.classList.add('front-cam');
   else videoEl.classList.remove('front-cam');
   await new Promise(res => { videoEl.onloadeddata = res; if (videoEl.readyState >= 2) res(); });
@@ -79,50 +74,43 @@ async function openCamera(videoEl, facing) {
 function closeCamera(stream) { if (stream) stream.getTracks().forEach(t => t.stop()); }
 
 // ===========================
-// MODEL LOADING
+// MODELS
 // ===========================
 async function loadModels() {
   const s = document.getElementById('kioskStatus');
-  s.textContent = 'Models load ho rahe hain... / Loading models...';
+  s.textContent = 'Models load ho rahe hain...';
   try {
     await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
     s.textContent = 'Model 1/3 ✔';
     await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
     s.textContent = 'Model 2/3 ✔';
     await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
-    s.textContent = 'Ready ✔ Camera shuru ho raha hai...';
+    s.textContent = 'Ready ✔';
     modelsLoaded = true;
     startKiosk();
-  } catch (err) {
-    s.textContent = 'Model load fail: ' + err.message;
-  }
+  } catch (err) { s.textContent = 'Model load fail: ' + err.message; }
 }
 loadModels();
 
 // ===========================
-// KIOSK — MARK ATTENDANCE
+// KIOSK
 // ===========================
 async function startKiosk() {
   if (!modelsLoaded || kioskRunning) return;
-  const video = document.getElementById('kioskVideo');
   try {
     document.getElementById('kioskStatus').textContent = 'Camera shuru ho raha hai...';
-    kioskStream = await openCamera(video, kioskFacing);
-    document.getElementById('kioskStatus').textContent = '✔ Camera ready — apna chehra dikhao';
+    kioskStream = await openCamera(document.getElementById('kioskVideo'), kioskFacing);
+    document.getElementById('kioskStatus').textContent = '✔ Camera ready — chehra dikhao';
     kioskRunning = true;
     loadTodaySummary();
     kioskDetectLoop();
-  } catch (e) {
-    document.getElementById('kioskStatus').textContent = 'Camera error: ' + e.message;
-  }
+  } catch (e) { document.getElementById('kioskStatus').textContent = 'Camera error: ' + e.message; }
 }
 function stopKiosk() { kioskRunning = false; closeCamera(kioskStream); kioskStream = null; }
 
-// Camera switch — kiosk
 document.getElementById('kioskCamSwitch').addEventListener('click', async () => {
   kioskFacing = kioskFacing === 'environment' ? 'user' : 'environment';
-  stopKiosk();
-  await startKiosk();
+  stopKiosk(); await startKiosk();
 });
 
 async function kioskDetectLoop() {
@@ -135,7 +123,6 @@ async function kioskDetectLoop() {
     overlay.width = video.videoWidth || 640;
     overlay.height = video.videoHeight || 480;
     ctx.clearRect(0, 0, overlay.width, overlay.height);
-
     if (det) {
       const b = det.detection.box;
       ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 3;
@@ -146,13 +133,12 @@ async function kioskDetectLoop() {
       document.getElementById('kioskStatus').textContent = 'Chehra nahi dikha — camera ke paas aao';
     }
   } catch (err) { console.error(err); }
-  setTimeout(kioskDetectLoop, 700); // fast loop
+  setTimeout(kioskDetectLoop, 700);
 }
 
 async function markAttendance(descriptor) {
   const now = Date.now();
   if (lastMarkedId && now - lastMarkedTime < COOLDOWN_MS) return;
-
   try {
     const res = await authFetch('/api/attendance', {
       method: 'POST',
@@ -163,11 +149,10 @@ async function markAttendance(descriptor) {
     const card = document.getElementById('kioskResult');
 
     if (!res.ok) {
-      if (data.error === 'Face not recognized') {
-        document.getElementById('kioskStatus').textContent = 'Pehchaan nahi hua — kya yeh worker registered hai?';
-      } else if (data.error === 'No workers enrolled') {
+      if (data.error === 'Face not recognized')
+        document.getElementById('kioskStatus').textContent = 'Pehchaan nahi hua — worker registered hai?';
+      else if (data.error === 'No workers enrolled')
         document.getElementById('kioskStatus').textContent = 'Koi worker registered nahi — pehle Enroll karo';
-      }
       return;
     }
 
@@ -180,7 +165,7 @@ async function markAttendance(descriptor) {
         <h2>✅ CHECK IN</h2>
         <p><strong>${data.record.name}</strong></p>
         <p>🕐 ${new Date(data.record.time).toLocaleTimeString('en-IN')}</p>
-        <p style="font-size:14px;color:#666">Shift shuru! / Shift started</p>
+        <p class="sub">Shift shuru! / Shift started</p>
       `;
       loadTodaySummary();
     } else if (data.type === 'check-out') {
@@ -189,21 +174,27 @@ async function markAttendance(descriptor) {
         <h2>👋 CHECK OUT</h2>
         <p><strong>${data.record.name}</strong></p>
         <p>🕐 In: ${new Date(data.record.checkIn).toLocaleTimeString('en-IN')} → Out: ${new Date(data.record.checkOut).toLocaleTimeString('en-IN')}</p>
-        <p style="font-size:18px;font-weight:700;color:#856404">⏱ ${data.record.hoursWorked} hours worked</p>
+        <p class="hours">⏱ ${data.record.hoursWorked} hours</p>
+        <p class="payment">💰 ₹${data.record.payment} earned today</p>
       `;
       loadTodaySummary();
+    } else if (data.type === 'too-early') {
+      card.className = 'result-card tooearly';
+      card.innerHTML = `
+        <h2>⏳ Too Early / Abhi nahi</h2>
+        <p><strong>${data.message}</strong></p>
+        <p class="sub">Check-out ke liye kam se kam 1 ghanta rukhna hoga</p>
+      `;
     } else if (data.type === 'done') {
       card.className = 'result-card done';
       card.innerHTML = `
         <h2>ℹ️ Already Done</h2>
         <p><strong>${data.message}</strong></p>
-        <p style="font-size:14px">Aaj ka check-in aur check-out ho chuka hai</p>
+        <p class="sub">Aaj ka check-in aur check-out ho chuka hai</p>
       `;
     }
     card.classList.remove('hidden');
-  } catch (e) {
-    document.getElementById('kioskStatus').textContent = 'Network error: ' + e.message;
-  }
+  } catch (e) { document.getElementById('kioskStatus').textContent = 'Network error: ' + e.message; }
 }
 
 async function loadTodaySummary() {
@@ -214,6 +205,7 @@ async function loadTodaySummary() {
       <span class="total">Total: ${d.totalWorkers}</span>
       <span class="present">Present: ${d.totalPresent}</span>
       <span class="absent">Absent: ${d.totalAbsent}</span>
+      <span class="payment">💰 ₹${d.totalPayment || 0}</span>
     `;
   } catch (e) {}
 }
@@ -226,36 +218,32 @@ async function startEnroll() {
   try {
     enrollStream = await openCamera(document.getElementById('enrollVideo'), enrollFacing);
     document.getElementById('enrollStatus').textContent = 'Camera ready — Photo Lo button dabao';
-  } catch (e) {
-    document.getElementById('enrollStatus').textContent = 'Camera error: ' + e.message;
-  }
+  } catch (e) { document.getElementById('enrollStatus').textContent = 'Camera error: ' + e.message; }
 }
 function stopEnroll() { closeCamera(enrollStream); enrollStream = null; }
 
-// Camera switch — enroll
 document.getElementById('enrollCamSwitch').addEventListener('click', async () => {
   enrollFacing = enrollFacing === 'user' ? 'environment' : 'user';
-  stopEnroll();
-  await startEnroll();
+  stopEnroll(); await startEnroll();
 });
 
 document.getElementById('captureBtn').addEventListener('click', async () => {
   const video = document.getElementById('enrollVideo');
   const overlay = document.getElementById('enrollOverlay');
   const status = document.getElementById('enrollStatus');
-  status.textContent = 'Chehra dhundh rahe hain... / Detecting...';
+  status.textContent = 'Chehra dhundh rahe hain...';
   try {
     const det = await faceapi.detectSingleFace(video, DETECT_OPTIONS).withFaceLandmarks().withFaceDescriptor();
     const ctx = overlay.getContext('2d');
     overlay.width = video.videoWidth || 640;
     overlay.height = video.videoHeight || 480;
     ctx.clearRect(0, 0, overlay.width, overlay.height);
-    if (!det) { status.textContent = 'Chehra nahi mila — seedha camera ke saamne aao, roshni mein'; return; }
+    if (!det) { status.textContent = 'Chehra nahi mila — seedha camera ke saamne aao'; return; }
     const b = det.detection.box;
     ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 3;
     ctx.strokeRect(b.x, b.y, b.width, b.height);
     capturedDescriptor = Array.from(det.descriptor);
-    status.textContent = `✔ Photo le li (${(det.detection.score*100).toFixed(0)}%) — ab Register karo`;
+    status.textContent = `✔ Photo le li (${(det.detection.score*100).toFixed(0)}%) — ab naam likho aur Register karo`;
     document.getElementById('enrollSubmit').disabled = false;
   } catch (err) { status.textContent = 'Error: ' + err.message; }
 });
@@ -263,8 +251,8 @@ document.getElementById('captureBtn').addEventListener('click', async () => {
 document.getElementById('enrollSubmit').addEventListener('click', async () => {
   const status = document.getElementById('enrollStatus');
   const name = document.getElementById('empName').value.trim();
-  if (!name) { status.textContent = 'Naam likho pehle / Enter name first'; return; }
-  if (!capturedDescriptor) { status.textContent = 'Pehle photo lo / Capture face first'; return; }
+  if (!name) { status.textContent = 'Naam likho pehle / Enter name'; return; }
+  if (!capturedDescriptor) { status.textContent = 'Pehle photo lo / Capture face'; return; }
   try {
     const r = await authFetch('/api/enroll', {
       method: 'POST',
@@ -272,7 +260,13 @@ document.getElementById('enrollSubmit').addEventListener('click', async () => {
       body: JSON.stringify({ name, descriptor: capturedDescriptor })
     });
     const d = await r.json();
-    if (!r.ok) { status.textContent = 'Error: ' + d.error; return; }
+    if (!r.ok) {
+      // Show duplicate face error clearly
+      status.textContent = '❌ ' + d.error;
+      status.style.color = '#dc3545';
+      setTimeout(() => { status.style.color = ''; }, 5000);
+      return;
+    }
     status.textContent = '✅ ' + d.message;
     document.getElementById('empName').value = '';
     capturedDescriptor = null;
@@ -295,7 +289,7 @@ async function loadWorkerList() {
       const del = document.createElement('button');
       del.textContent = '✕ Remove';
       del.onclick = async () => {
-        if (confirm(`${w.name} ko hatana hai?`)) {
+        if (confirm(`${w.name} ko hatana hai? / Remove ${w.name}?`)) {
           await authFetch(`/api/workers/${w.employeeId}`, { method: 'DELETE' });
           loadWorkerList();
         }
@@ -326,7 +320,7 @@ function loadTodayReport() {
 async function loadDailyReport(date) {
   if (!date) { alert('Date select karo'); return; }
   const tbody = document.querySelector('#reportTable tbody');
-  tbody.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7">Loading...</td></tr>';
   try {
     const r = await authFetch(`/api/attendance?date=${date}`);
     const d = await r.json();
@@ -335,9 +329,10 @@ async function loadDailyReport(date) {
       <span class="total">Total: ${d.totalWorkers}</span>
       <span class="present">✅ ${d.totalPresent}</span>
       <span class="absent">❌ ${d.totalAbsent}</span>
+      <span class="payment">💰 ₹${d.totalPayment || 0}</span>
     `;
     tbody.innerHTML = '';
-    if (!d.report.length) { tbody.innerHTML = '<tr><td colspan="6">No data</td></tr>'; return; }
+    if (!d.report.length) { tbody.innerHTML = '<tr><td colspan="7">No data</td></tr>'; return; }
     d.report.sort((a, b) => {
       const order = { 'Complete': 0, 'Checked In': 1, 'Absent': 2 };
       return (order[a.status] || 2) - (order[b.status] || 2) || a.name.localeCompare(b.name);
@@ -347,11 +342,12 @@ async function loadDailyReport(date) {
       const cin = r.checkIn ? new Date(r.checkIn).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—';
       const cout = r.checkOut ? new Date(r.checkOut).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—';
       const hrs = r.hoursWorked ? parseFloat(r.hoursWorked).toFixed(1) : '—';
+      const pay = r.payment > 0 ? '₹' + r.payment : '—';
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${i+1}</td><td>${r.name}</td><td><span class="badge ${bc}">${r.status}</span></td><td>${cin}</td><td>${cout}</td><td>${hrs}</td>`;
+      tr.innerHTML = `<td>${i+1}</td><td>${r.name}</td><td><span class="badge ${bc}">${r.status}</span></td><td>${cin}</td><td>${cout}</td><td>${hrs}</td><td>${pay}</td>`;
       tbody.appendChild(tr);
     });
-  } catch (e) { tbody.innerHTML = `<tr><td colspan="6">Error: ${e.message}</td></tr>`; }
+  } catch (e) { tbody.innerHTML = `<tr><td colspan="7">Error: ${e.message}</td></tr>`; }
 }
 
 // ===========================
@@ -371,7 +367,7 @@ async function loadMonthlyReport() {
   const month = document.getElementById('monthSelect').value;
   const year = document.getElementById('yearSelect').value;
   const tbody = document.querySelector('#monthlyTable tbody');
-  tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
   try {
     const r = await authFetch(`/api/attendance/monthly?month=${month}&year=${year}`);
     const d = await r.json();
@@ -379,19 +375,20 @@ async function loadMonthlyReport() {
     document.getElementById('monthlySummary').innerHTML = `
       <span>📊 ${mn[d.month-1]} ${d.year}</span>
       <span class="total">Working Days: ${d.workingDays}</span>
+      <span class="payment">💰 Total: ₹${d.grandTotalPayment || 0}</span>
     `;
     tbody.innerHTML = '';
-    if (!d.summary.length) { tbody.innerHTML = '<tr><td colspan="5">No data</td></tr>'; return; }
+    if (!d.summary.length) { tbody.innerHTML = '<tr><td colspan="6">No data</td></tr>'; return; }
     d.summary.sort((a, b) => b.totalPresent - a.totalPresent);
     d.summary.forEach((w, i) => {
       const pct = d.workingDays > 0 ? Math.round((w.totalPresent / d.workingDays) * 100) : 0;
       const color = pct >= 90 ? '#155724' : pct >= 75 ? '#856404' : '#dc3545';
       const tr = document.createElement('tr');
       tr.innerHTML = `<td>${i+1}</td><td>${w.name}</td><td><strong>${w.totalPresent}</strong>/${d.workingDays}</td>
-        <td>${w.totalHours}h</td><td style="color:${color};font-weight:700">${pct}%</td>`;
+        <td>${w.totalHours}h</td><td style="color:${color};font-weight:700">${pct}%</td><td class="pay-col">₹${w.totalPayment}</td>`;
       tbody.appendChild(tr);
     });
-  } catch (e) { tbody.innerHTML = `<tr><td colspan="5">Error: ${e.message}</td></tr>`; }
+  } catch (e) { tbody.innerHTML = `<tr><td colspan="6">Error: ${e.message}</td></tr>`; }
 }
 
 function formatDate(s) {
