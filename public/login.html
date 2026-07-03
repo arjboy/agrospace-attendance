@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Login — Factory Attendance</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .login-box {
+    background: #fff;
+    padding: 32px 28px;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+    width: 100%;
+    max-width: 380px;
+    text-align: center;
+  }
+  .login-box h1 { color: #1f3d2c; margin: 0 0 4px; font-size: 24px; }
+  .login-box p { color: #666; margin: 0 0 24px; font-size: 14px; }
+  .login-box input {
+    width: 100%;
+    padding: 14px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 15px;
+    margin-bottom: 12px;
+  }
+  .login-box input:focus { border-color: #1f3d2c; outline: none; }
+  .login-box button {
+    width: 100%;
+    padding: 14px;
+    background: #1f3d2c;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .login-box button:hover { background: #2a5e3f; }
+  .login-error {
+    color: #b3413a;
+    font-size: 14px;
+    margin-top: 10px;
+    display: none;
+  }
+  .login-icon { font-size: 48px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<div class="login-box">
+  <div class="login-icon">🏭</div>
+  <h1>Factory Attendance</h1>
+  <p>Login to access the system</p>
+
+  <input type="text" id="username" placeholder="Username" autocomplete="username">
+  <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+  <button id="loginBtn">🔐 Login</button>
+  <div class="login-error" id="loginError"></div>
+</div>
+
+<script>
+  // If already logged in, go to main page
+  const token = localStorage.getItem('authToken');
+  if (token) {
+    fetch('/api/auth/check', { headers: { 'x-auth-token': token } })
+      .then(r => r.json())
+      .then(data => { if (data.loggedIn) window.location.href = '/'; });
+  }
+
+  document.getElementById('loginBtn').addEventListener('click', doLogin);
+  document.getElementById('password').addEventListener('keyup', (e) => {
+    if (e.key === 'Enter') doLogin();
+  });
+  document.getElementById('username').addEventListener('keyup', (e) => {
+    if (e.key === 'Enter') document.getElementById('password').focus();
+  });
+
+  async function doLogin() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const errorEl = document.getElementById('loginError');
+
+    if (!username || !password) {
+      errorEl.textContent = 'Please enter username and password';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        errorEl.textContent = data.error || 'Login failed';
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      localStorage.setItem('authToken', data.token);
+      localStorage.setItem('authUser', data.username);
+      window.location.href = '/';
+    } catch (e) {
+      errorEl.textContent = 'Network error: ' + e.message;
+      errorEl.style.display = 'block';
+    }
+  }
+</script>
+
+</body>
+</html>

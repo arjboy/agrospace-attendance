@@ -8,10 +8,29 @@ body {
 header {
   background: #1f3d2c;
   color: #f5f0e6;
-  padding: 16px 20px;
+  padding: 12px 20px;
   text-align: center;
 }
-header h1 { margin: 0 0 12px; font-size: 20px; }
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+header h1 { margin: 0; font-size: 18px; }
+.user-info { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.logout-btn {
+  background: #b3413a;
+  color: #fff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+.logout-btn:hover { background: #d04a42; }
+
 nav { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
 .tab-btn {
   background: transparent;
@@ -47,12 +66,7 @@ video, canvas {
   object-fit: cover;
 }
 
-.status {
-  margin-top: 10px;
-  font-size: 14px;
-  text-align: center;
-  color: #333;
-}
+.status { margin-top: 10px; font-size: 14px; text-align: center; color: #333; }
 
 .result-card {
   margin-top: 12px;
@@ -66,7 +80,6 @@ video, canvas {
 .result-card h2 { margin: 0 0 4px; color: #1f3d2c; }
 .result-card.already { background: #f3ece0; border-color: #d4af6a; }
 
-/* Summary bar */
 .summary-bar {
   margin: 12px 0;
   padding: 10px 14px;
@@ -84,7 +97,6 @@ video, canvas {
 .summary-bar .absent { color: #b3413a; }
 .summary-bar .total { color: #1f3d2c; }
 
-/* Forms */
 form { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
 form input, form button {
   padding: 12px;
@@ -101,7 +113,6 @@ form button {
 }
 form button:disabled { background: #999; cursor: not-allowed; }
 
-/* Worker list */
 #workerList { list-style: none; padding: 0; margin-top: 8px; }
 #workerList li {
   background: #fff;
@@ -123,7 +134,6 @@ form button:disabled { background: #999; cursor: not-allowed; }
   font-size: 12px;
 }
 
-/* Report controls */
 .report-controls {
   display: flex;
   gap: 8px;
@@ -139,18 +149,9 @@ form button:disabled { background: #999; cursor: not-allowed; }
   border: 1px solid #ccc;
   font-size: 14px;
 }
-.report-controls button {
-  background: #1f3d2c;
-  color: #fff;
-  border: none;
-  cursor: pointer;
-}
-.export-btn {
-  background: #2a6041 !important;
-  margin-left: auto;
-}
+.report-controls button { background: #1f3d2c; color: #fff; border: none; cursor: pointer; }
+.export-btn { background: #2a6041 !important; margin-left: auto; }
 
-/* Tables */
 table {
   width: 100%;
   border-collapse: collapse;
@@ -159,15 +160,10 @@ table {
   overflow: hidden;
   font-size: 13px;
 }
-th, td {
-  padding: 10px 8px;
-  text-align: left;
-  border-bottom: 1px solid #eee;
-}
+th, td { padding: 10px 8px; text-align: left; border-bottom: 1px solid #eee; }
 th { background: #1f3d2c; color: #fff; font-weight: 600; white-space: nowrap; }
 tr:hover { background: #f9f9f6; }
 
-/* Status badges in table */
 .badge {
   display: inline-block;
   padding: 2px 10px;
@@ -178,10 +174,10 @@ tr:hover { background: #f9f9f6; }
 .badge-present { background: #d4edda; color: #155724; }
 .badge-absent { background: #f8d7da; color: #721c24; }
 
-/* Responsive */
 @media (max-width: 480px) {
   main { padding: 10px; }
   th, td { padding: 6px 4px; font-size: 12px; }
   .report-controls { flex-direction: column; }
   .export-btn { margin-left: 0; }
+  .header-top { flex-direction: column; gap: 8px; }
 }
